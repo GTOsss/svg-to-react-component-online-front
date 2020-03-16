@@ -152,12 +152,22 @@ const Previews = () => {
     memo: false,
     ext: 'js',
   });
+  const [additionalSettings, setAdditionalSettings] = React.useState({
+    generateIndexFile: true,
+    generateDemo: true,
+  });
 
   React.useEffect(() => () => {
     files.forEach((file) => URL.revokeObjectURL(file.preview));
   }, [files]);
 
+
+  const resetDownload = () => {
+    setDownloadPath('');
+  };
+
   const onDrop = (acceptedFiles) => {
+    resetDownload();
     setFiles(acceptedFiles.map((file) => Object.assign(file, {
       preview: URL.createObjectURL(file),
     })));
@@ -180,15 +190,20 @@ const Previews = () => {
     formData.append('settings', JSON.stringify({
       ...settings, dimensions: !settings.dimensions,
     }));
+    formData.append('additionalSettings', JSON.stringify({
+      ...additionalSettings,
+    }));
 
     try {
-      const response = await fetch('http://localhost:3000/upload', {
+      const response = await fetch('/upload', {
         method: 'POST',
         body: formData,
       });
       if (response.status > 400) {
         const responseBody = await response.json();
-        NotificationManager.error(`${responseBody.err}\nTry change settings.`, 'Error', 60000);
+        const error = responseBody.err;
+        const errorMessage = typeof error === 'string' ? `${error}\n` : '';
+        NotificationManager.error(`${errorMessage}Try change settings.`, 'Error', 60000);
       }
       const result = await response.json();
       setDownloadPath(result.path);
@@ -196,13 +211,10 @@ const Previews = () => {
         'The files were successfully converted! Now you can download them.', 'Success', 10000,
       );
     } catch (error) {
+      NotificationManager.error(`Connection error: ${error.message}`, 'Error', 60000);
       console.error(error);
     }
     setPending(false);
-  };
-
-  const resetDownload = () => {
-    setDownloadPath('');
   };
 
   const onChangePlugins = (name) => () => {
@@ -213,6 +225,11 @@ const Previews = () => {
   const onChangeSettings = (name) => (value) => {
     resetDownload();
     setSettings({ ...settings, [name]: value });
+  };
+
+  const onChangeAdditionalSettings = (name) => (value) => {
+    resetDownload();
+    setAdditionalSettings({ ...additionalSettings, [name]: value });
   };
 
   const submitDisabled = !(files && files.length) || pending;
@@ -267,9 +284,6 @@ const Previews = () => {
           >
             Icon
           </Checkbox>
-        </SettingsSection>
-
-        <SettingsSection>
           <Checkbox
             name="dimensions"
             value={settings.dimensions}
@@ -277,6 +291,9 @@ const Previews = () => {
           >
             Remove width and height
           </Checkbox>
+        </SettingsSection>
+
+        <SettingsSection>
           <Checkbox
             name="memo"
             value={settings.memo}
@@ -291,9 +308,6 @@ const Previews = () => {
           >
             Ref
           </Checkbox>
-        </SettingsSection>
-
-        <SettingsSection>
           <Checkbox
             name="native"
             value={settings.native}
@@ -301,6 +315,9 @@ const Previews = () => {
           >
             React native
           </Checkbox>
+        </SettingsSection>
+
+        <SettingsSection>
           <Input
             name="ext"
             inputWidth="100px"
@@ -309,6 +326,20 @@ const Previews = () => {
           >
             File extension
           </Input>
+          <Checkbox
+            name="generateIndexFile"
+            value={additionalSettings.generateIndexFile}
+            onChange={onChangeAdditionalSettings('generateIndexFile')}
+          >
+            Generate index file
+          </Checkbox>
+          <Checkbox
+            name="generateDemo"
+            value={additionalSettings.generateDemo}
+            onChange={onChangeAdditionalSettings('generateDemo')}
+          >
+            Generate demo html
+          </Checkbox>
         </SettingsSection>
       </Settings>
 
