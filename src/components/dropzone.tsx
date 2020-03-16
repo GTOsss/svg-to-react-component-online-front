@@ -2,6 +2,9 @@
 import * as React from 'react';
 import { useDropzone } from 'react-dropzone';
 import styled, { css } from 'styled-components';
+import Checkbox from '@components/checkbox';
+import { NotificationManager } from 'react-notifications';
+import Input from '@components/input';
 
 const thumbsContainer: React.CSSProperties = {
   display: 'flex',
@@ -95,6 +98,17 @@ const IconArrows = styled.svg<IIconArrows>`
   visibility: ${({ visible }) => (visible ? 'visibility' : 'hidden')};
 `;
 
+const Settings = styled.div`
+  display: flex;
+`;
+
+const SettingsSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 10px 20px;
+  flex: 1 1 100px;
+`;
+
 interface IProps {
   arrowsUp: boolean;
   visible: boolean;
@@ -125,6 +139,19 @@ const Previews = () => {
   const [files, setFiles] = React.useState([]);
   const [downloadPath, setDownloadPath] = React.useState('');
   const [pending, setPending] = React.useState(false);
+  const [pluginsMap, setPluginsMap] = React.useState({
+    '@svgr/plugin-svgo': true,
+    '@svgr/plugin-jsx': true,
+    '@svgr/plugin-prettier': true,
+  });
+  const [settings, setSettings] = React.useState({
+    icon: false,
+    native: false,
+    dimensions: false,
+    ref: false,
+    memo: false,
+    ext: 'js',
+  });
 
   React.useEffect(() => () => {
     files.forEach((file) => URL.revokeObjectURL(file.preview));
@@ -141,25 +168,51 @@ const Previews = () => {
     onDrop,
   });
 
-
   const onSubmit = async (e) => {
     e.preventDefault();
     setPending(true);
     const formData = new FormData();
 
     files.map((el) => formData.append('images', el));
+    const plugins = [];
+    Object.entries(pluginsMap).forEach(([key, value]) => (value ? plugins.push(key) : null));
+    formData.append('plugins', JSON.stringify(plugins));
+    formData.append('settings', JSON.stringify({
+      ...settings, dimensions: !settings.dimensions,
+    }));
 
     try {
       const response = await fetch('http://localhost:3000/upload', {
         method: 'POST',
         body: formData,
       });
+      if (response.status > 400) {
+        const responseBody = await response.json();
+        NotificationManager.error(`${responseBody.err}\nTry change settings.`, 'Error', 60000);
+      }
       const result = await response.json();
       setDownloadPath(result.path);
-    } catch (e) {
-      console.error(e);
+      NotificationManager.success(
+        'The files were successfully converted! Now you can download them.', 'Success', 10000,
+      );
+    } catch (error) {
+      console.error(error);
     }
     setPending(false);
+  };
+
+  const resetDownload = () => {
+    setDownloadPath('');
+  };
+
+  const onChangePlugins = (name) => () => {
+    resetDownload();
+    setPluginsMap({ ...pluginsMap, [name]: !pluginsMap[name] });
+  };
+
+  const onChangeSettings = (name) => (value) => {
+    resetDownload();
+    setSettings({ ...settings, [name]: value });
   };
 
   const submitDisabled = !(files && files.length) || pending;
@@ -191,12 +244,79 @@ const Previews = () => {
         {thumbs}
       </div>
 
+      <Settings>
+        <SettingsSection>
+          <Checkbox
+            onChange={onChangePlugins('@svgr/plugin-svgo')}
+            name="@svgr/plugin-svgo"
+            value={pluginsMap['@svgr/plugin-svgo']}
+          >
+            Optimize (@svgr/plugin-svgo)
+          </Checkbox>
+          <Checkbox
+            onChange={onChangePlugins('@svgr/plugin-prettier')}
+            name="@svgr/plugin-prettier"
+            value={pluginsMap['@svgr/plugin-prettier']}
+          >
+            Prettier (@svgr/plugin-prettier)
+          </Checkbox>
+          <Checkbox
+            name="icon"
+            value={settings.icon}
+            onChange={onChangeSettings('icon')}
+          >
+            Icon
+          </Checkbox>
+        </SettingsSection>
+
+        <SettingsSection>
+          <Checkbox
+            name="dimensions"
+            value={settings.dimensions}
+            onChange={onChangeSettings('dimensions')}
+          >
+            Remove width and height
+          </Checkbox>
+          <Checkbox
+            name="memo"
+            value={settings.memo}
+            onChange={onChangeSettings('memo')}
+          >
+            Memo
+          </Checkbox>
+          <Checkbox
+            name="ref"
+            value={settings.ref}
+            onChange={onChangeSettings('ref')}
+          >
+            Ref
+          </Checkbox>
+        </SettingsSection>
+
+        <SettingsSection>
+          <Checkbox
+            name="native"
+            value={settings.native}
+            onChange={onChangeSettings('native')}
+          >
+            React native
+          </Checkbox>
+          <Input
+            name="ext"
+            inputWidth="100px"
+            value={settings.ext}
+            onChange={onChangeSettings('ext')}
+          >
+            File extension
+          </Input>
+        </SettingsSection>
+      </Settings>
 
       <Submit
-        download
+        download={Boolean(downloadPath && !submitDisabled)}
         href={downloadPath || '#'}
         disabled={submitDisabled}
-        onClick={downloadPath ? null : onSubmit}
+        onClick={!downloadPath && !submitDisabled ? onSubmit : null}
         theme={!isDownload ? 'primary' : 'secondary'}
       >
         <Arrows visible={!submitDisabled} arrowsUp={!isDownload} />
